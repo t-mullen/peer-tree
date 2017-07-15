@@ -82,6 +82,10 @@ Required `io` is an existing **socket.io-client** instance.
 
 `opts` will be passed to the stream constructor.
 
+### `treeClient.create()`
+
+Create a new tree and become the source.
+
 ### `treeClient.on('discover', function (treeID) {})`
 
 Fires when a tree is joined.
