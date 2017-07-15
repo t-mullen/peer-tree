@@ -144,7 +144,8 @@ PeerTreeClient.prototype._onStream = function (stream) {
   var self = this
 
   if (self._downPeers.length > 0) {
-    // TODO: Renegotiate instead of reconnecting
+    // Renegotiate instead of reconnecting
+    // This never happens unless an upstream peer is misbehaving.
     self.reconnect(self._treeID, stream)
   } else {
     self.stream = stream

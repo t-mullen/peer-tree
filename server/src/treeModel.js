@@ -1,5 +1,6 @@
 // Peers connect to each other in a k-tree with an indegree of 1 and outdegree of k
-function TreeModel (k) {
+// k1 is the initial outdegree for the broadcaster
+function TreeModel (k, k1) {
   var self = this
   if (!(self instanceof TreeModel)) return new TreeModel(k)
 
@@ -19,14 +20,16 @@ function TreeModel (k) {
   function BFS () {
     var queue
     var current
+    var isBroadcaster = true
 
     queue = [broadcasterID]
 
     while (queue.length > 0) {
       current = graph[queue.shift()]
-      if (current.children.length < k) {
+      if (current.children.length < k || (isBroadcaster && current.children.length < k1)) {
         return current.id
       }
+      isBroadcaster = false
 
       for (var i = 0; i < current.children.length; i++) {
         queue.push(current.children[i])

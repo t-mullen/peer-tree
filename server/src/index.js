@@ -11,6 +11,7 @@ function PeerTreeServer (io, opts) {
   self._models = {}
   self._socketToTree = {}
   self.k = opts.k || 4
+  self.k1 = opts.k1 || 10
 
   self._signal.on('discover', self._onDiscover.bind(self))
   self._signal.on('disconnect', self._onDisconnect.bind(self))
@@ -31,7 +32,7 @@ PeerTreeServer.prototype._onDiscover = function (request) {
   var createNew = request.metadata.createNew || null
 
   if (createNew) {
-    self._models[id] = new TreeModel(self.k)
+    self._models[id] = new TreeModel(self.k, self.k1)
     self._models[id].setBroadcaster(id)
     request.discover({
       peers: [],
