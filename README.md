@@ -1,5 +1,5 @@
 # peer-tree
-[![Standard - JavaScript Style Guide](https://img.shields.io/badge/code%20style-standard-brightgreen.svg)](http://standardjs.com/) [![npm](https://img.shields.io/npm/dt/simple-signal-client.svg)](https://www.npmjs.org/package/simple-signal-client)
+[![Standard - JavaScript Style Guide](https://img.shields.io/badge/code%20style-standard-brightgreen.svg)](http://standardjs.com/)
 
 **peer-tree** connects an unlimited number of WebRTC peers in a k-tree (like a binary tree, but with k downstream connections instead of just 2). Peers forward data and video streams down to the peers below them. This allows one-to-many broadcast to a huge number of peers with extremely low latency.
 
