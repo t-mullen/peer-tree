@@ -57,7 +57,7 @@ treeClient.on('upstreamPeer', (peer) => {
   peer.pipe(writableStream) // this is our stream data
 })
 treeClient.on('downstreamPeer', (peer) => {
-  peer.pipe(readableStream) // either replicate the upstream content, or pipe else
+  readableStream.pipe(peer) // either replicate the upstream content, or pipe else
 })
 ```
 
