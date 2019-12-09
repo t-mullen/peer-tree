@@ -1,85 +1,99 @@
-var Duplex = require('readable-stream').Duplex
-var inherits = require('inherits')
+const SimpleSignalClient = require('simple-signal-client')
+const inherits = require('inherits')
+const EventEmitter = require('nanobus')
 
-var SimpleSignalClient = require('simple-signal-client')
-
-inherits(PeerTreeClient, Duplex)
+inherits(PeerTreeClient, EventEmitter)
 
 function PeerTreeClient (io, opts) {
   var self = this
   if (!(self instanceof PeerTreeClient)) return new PeerTreeClient(io, opts)
 
-  Duplex.call(self, opts)
+  EventEmitter.call(this)
 
   self.opts = opts || {}
+  self.opts.timeout = self.opts.timeout || 10000
 
+  self.destroyed = false 
   self._treeID = null
-  self.stream = null
 
   self._socket = io
-  self._client = new SimpleSignalClient(io, {
-    ignore: true
-  })
+  self._client = new SimpleSignalClient(io)
 
   self._upPeerIDs = [] // IDs of confirmed upstream peers
   self._upPeers = []
   self._downPeers = []
 
-  self._client.on('ready', self._onDiscover.bind(self))
+  self._client.on('discover', self._onDiscover.bind(self))
   self._client.on('request', self._onRequest.bind(self))
-  self._client.on('peer', self._onPeer.bind(self))
 }
 
 // Join an existing tree
-PeerTreeClient.prototype.connect = function (treeID, stream) {
+PeerTreeClient.prototype.connect = function (treeID) {
   var self = this
 
+  self._treeID = treeID
   if (self._treeID) {
     self.emit('error', new Error('Already connected to a tree'))
   }
 
-  self._client.rediscover({
-    treeID: treeID
+  self._client.discover({
+    treeID
   })
 }
 
-PeerTreeClient.prototype.disconnect = function () {
+PeerTreeClient.prototype.destroy = function () {
   var self = this
 
+  this.destroyed = true
+  self._client.destroy()
   self._treeID = null
-  self.stream = null
+}
 
-  self._downPeers.forEach(function (peer) {
-    peer.destroy()
-  })
+PeerTreeClient.prototype._disconnectUpstream = function () {
+  var self = this
+
   self._upPeers.forEach(function (peer) {
     peer.destroy()
   })
 
   self._upPeerIDs = []
-  self._downPeers = []
   self._upPeers = []
 
   self.emit('disconnect') // disconnected from tree
 }
 
-PeerTreeClient.prototype.reconnect = function (treeID, stream) {
+PeerTreeClient.prototype._disconnectDownstream = function () {
   var self = this
 
-  self.disconnect()
-  self.connect(treeID, stream) // rejoin the tree
+  self._downPeers.forEach(function (peer) {
+    peer.destroy()
+  })
+  self._downPeers = []
+}
+
+PeerTreeClient.prototype.reconnectUpstream = function () {
+  var self = this
+
+  self._disconnectUpstream()
+  self.connect(self._treeID) // rejoin the tree
+}
+
+PeerTreeClient.prototype._reconnectDownstream = function () {
+  var self = this
+
+  self._disconnectDownstream()
+  self.connect(self._treeID) // rejoin the tree
 }
 
 // Create a new tree
-PeerTreeClient.prototype.create = function (stream) {
+PeerTreeClient.prototype.create = function () {
   var self = this
 
   if (self._treeID) {
     return self.emit('error', new Error('Already connected to tree.'))
   }
 
-  self.stream = stream
-  self._client.rediscover({
+  self._client.discover({
     createNew: true
   })
 }
@@ -87,14 +101,17 @@ PeerTreeClient.prototype.create = function (stream) {
 PeerTreeClient.prototype._onDiscover = function (discoveryData) {
   var self = this
 
-  if (discoveryData.ignore) return
   if (discoveryData.err) {
     return self.emit('error', new Error(discoveryData.err))
   }
 
   discoveryData.peers.forEach(function (peerID) {
     self._upPeerIDs.push(peerID)
-    self._client.connect(peerID, self.opts)
+    self._client.connect(peerID, null, self.opts).then(({ peer, _ }) => {
+      self._onPeer(peer, peerID)
+    }).catch(reason => {
+      self.reconnectUpstream()
+    })
   })
 
   self.emit('discover', discoveryData.treeID) // discovered tree
@@ -104,60 +121,41 @@ PeerTreeClient.prototype._onRequest = function (request) {
   var self = this
 
   // All incoming requests are downstream, so no issue accepting them
-  request.accept({
-    stream: self.stream,
-    wrtc: self.opts.wrtc
-  })
+  request.accept(null, self.opts).then(({ peer, _ }) => {
+    self._onPeer(peer, request.initiator)
+  }).catch(reason => console.error(reason))
 }
 
-PeerTreeClient.prototype._onPeer = function (peer) {
+PeerTreeClient.prototype._onPeer = function (peer, id) {
   var self = this
+  if (this.destroyed) return peer.destroy()
 
-  if (self._upPeerIDs.indexOf(peer.id) === -1) {
+  if (self._upPeerIDs.indexOf(id) === -1) {
     peer.index = self._downPeers.length
     self._downPeers.push(peer)
-    // we ignore data from this peer, it is downstream
+    self.emit('downstreamPeer', peer)
   } else {
     peer.isUpstream = true
     self._upPeers.push(peer)
-    peer.on('data', self._onData.bind(self))
-    peer.on('stream', self._onStream.bind(self))
-    peer.on('connect', function () {
-      self.emit('connect', self._treeID) // connected to tree
-    })
+    self.emit('upstreamPeer', peer)
   }
+  const timeout = setTimeout(() => {
+    self._onClose(peer)
+  }, self.opts.timeout)
+  peer.once('connect', () => { clearTimeout(timeout) })
   peer.on('close', self._onClose.bind(self, peer))
-}
-
-PeerTreeClient.prototype._onData = function (data) {
-  var self = this
-
-  self.push(data)
-
-  // forward downstream
-  self._downPeers.forEach(function (peer) {
-    peer.write(data)
+  peer.on('error', (err) => {
+    console.error(err)
+    peer.destroy()
   })
-}
-
-PeerTreeClient.prototype._onStream = function (stream) {
-  var self = this
-
-  if (self._downPeers.length > 0) {
-    // Renegotiate instead of reconnecting
-    // This never happens unless an upstream peer is misbehaving.
-    self.reconnect(self._treeID, stream)
-  } else {
-    self.stream = stream
-    self.emit('stream', stream)
-  }
 }
 
 PeerTreeClient.prototype._onClose = function (peer) {
   var self = this
 
+  peer.destroy()
   if (peer.isUpstream) {
-    self.reconnect()
+    self.reconnectUpstream()
   } else {
     self._downPeers.splice(peer.index, 1)
   }

@@ -1,7 +1,7 @@
 # peer-tree
 [![Standard - JavaScript Style Guide](https://img.shields.io/badge/code%20style-standard-brightgreen.svg)](http://standardjs.com/)
 
-**peer-tree** connects an unlimited number of WebRTC peers in a k-tree (like a binary tree, but with k downstream connections instead of just 2). Peers forward data and video streams down to the peers below them. This allows one-to-many broadcast to a huge number of peers with extremely low latency.
+**peer-tree** connects an unlimited number of WebRTC peers in a k-tree (like a binary tree, but with k downstream connections instead of just 2). Peers can forward data and video streams down to the peers below them. This allows one-to-many broadcast to a huge number of peers with extremely low latency.
 
 ## Install
 
@@ -39,10 +39,13 @@ var treeClient = new PeerTreeClient(socket)
 
 // If you want to create a new tree (and become the source)
 treeClient.create()
-treeClient.on('discover', function (treeID) {
-   // The tree has been created with the returned ID
-   readableStream.pipe(treeClient) // Each treeClient is a Duplex stream
-   treeClient.write('hello world')
+treeClient.on('discover', (treeID) => {
+  // The tree has been created with the returned ID
+  treeClient.write('hello world')
+})
+treeClient.on('downstreamPeer', (peer) => {
+  // pipe our data to every downstream peer
+  readableStream.pipe(peer)
 })
 
 // If you want to connect to an existing tree
@@ -50,10 +53,12 @@ treeClient.connect(treeID)
 treeClient.on('discover', function (treeID) {
   // Tree exists, but we may not be connected to an upstream peer yet
 })
-treeClient.on('connect', function (treeID) {
-  // Connected to an upstream peer
+treeClient.on('upstreamPeer', (peer) => {
+  peer.pipe(writableStream) // this is our stream data
 })
-treeClient.pipe(writableStream) // Each treeClient is a Duplex stream
+treeClient.on('downstreamPeer', (peer) => {
+  peer.pipe(readableStream) // either replicate the upstream content, or pipe else
+})
 ```
 
 ## Server API
@@ -80,49 +85,55 @@ Create a new PeerTreeClient. Each client can only connect to one tree.
 
 Required `io` is an existing **socket.io-client** instance.
 
-`opts` will be passed to the stream constructor.
+`opts` will be passed to the `simple-peer` constructor.
+
+`opts.timeout` is the time in milliseconds to wait for a peer to connect. Default is `10000`.
 
 ### `treeClient.create()`
 
 Create a new tree and become the source.
 
-### `treeClient.on('discover', function (treeID) {})`
+### `treeClient.reconnectUpstream()`
+
+Disconnect from the current upstream peer and request a new one from the server.
+
+### `treeClient.on('discover', (treeID) => {})`
 
 Fires when a tree is joined.
 
-`treeID` is the ID of the tree.
+`treeID` is the ID of the tree. Share this with other peer so they can join.
 
-### `treeClient.on('connect', function (treeID) {})`
+### `treeClient.on('upstreamPeer', (peer) => {})`
 
-Fires when an upstream peer is connected to. This event never fires for source peers.
+Fires when an upstream peer is connected to. This event never fires if this client is the source.
 
-`treeID` is the ID of the tree connected to.
+`peer` is a signalled `simple-peer` instance.
 
-### `treeClient.on('stream', function (stream) {})`
+### `treeClient.on('downstreamPeer', (peer) => {})`
 
-Fires when a MediaStream is received from an upstream peer.
+Fires when a downstream peer is connected to.
 
-`stream` is the MediaStream object received.
+`peer` is a signalled `simple-peer` instance.
 
 ### `treeClient.on('disconnect', function () {})`
 
-Fires when the peer disconnects from it's upstream peer. See Notes for methods to handle churn.
+Fires when the peer disconnects from it's upstream peer. It will automatically attempt to reconnect. See Notes for methods to handle churn.
 
 ### Notes
 
 #### Security Considerations
 
-**peer-tree** does not attempt to validate the data received by upstream peers. Any peer can replace the source data with their own (potentially malicious) data, or withold it altogether. Data should be cryptographically signed by the source and sensitive data should be encrypted or sent through secure channels. Peers that don't forward data should be removed from the tree.
+**peer-tree** does not attempt to validate data from upstream peers (they can provide any data stream). Data should be cryptographically signed by the source and sensitive data should be encrypted or sent through secure channels. Peers that don't forward data should be removed from the tree by your application. A signed append-only log is recommended!
 
-It is very difficult to verify the integrity of a MediaStream object, so their use is discouraged in applications that could potentially have malicious peers.
+It is very difficult to verify the integrity of MediaStream objects, so their use is discouraged in applications that could potentially have malicious peers.
 
 #### Churn/Peer Drop
 
-Peers won't stay connected forever, and when they do drop, all peers downstream will also be disconnected. peer-tree will automatically reconnect these peers, but it is possible that some data is missed during this reconnection process.
+Peers won't stay connected forever, and when they do drop, their immediate downstream peers will try to reconnect. peer-tree will automatically reconnect these peers, but it is possible that some data is missed during this reconnection process. Your replication process should consider that new downstream peers only have partial data.
 
-One way to handle this is to create two or more trees with a lower k-value and send the same data along them. This will reduce the chance that a peer is completely disconnected, although it adds some redundant data transfer.
+One way to mitigate this is to create two or more trees with a lower k-value and send the same data along them. This will reduce the chance that a peer is completely disconnected, although it adds some redundant data transfer.
 
-It is always possible that peers in the first few levels of the tree will disconnect, causing a large number of peers to lose connection. To prevent this, set k1 to the highest value possible and use multiple trees.
+It is always possible that peers in the first few levels of the tree will disconnect, causing a large number of peers to lose connection. To prevent this, set k1 to the highest value your source peer can handle and use multiple trees.
 
 #### Latency
 

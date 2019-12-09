@@ -1,6 +1,6 @@
 {
   "name": "peer-tree-client",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "A k-tree one-to-many network for WebRTC.",
   "main": "src/index.js",
   "directories": {
@@ -9,13 +9,12 @@
   "scripts": {
     "test": "npm run test-setup && npm run test-server && npm run test-standard && npm run test-node && npm run test-browser-local && npm run test-cleanup",
     "build": "browserify src/index.js -s PeerTreeClient -o ./../dist/peer-tree-client.js",
-    "test-setup": "npm install && cd ../server && npm install && cd ../client",
+    "test-setup": "cd ../server && cd ../client",
     "test-server": "cd ../server && node test/test-server.js& SERVER_PID=$! && cd ../client",
     "test-standard": "standard --fix \"src/*.js\" \"test/*.js\" \"../server/src/*.js\"",
-    "test-browser": "zuul -- test/*.js",
-    "test-browser-local": "zuul --local -- test/*.js",
-    "test-node": "npm run test-node-electron-webrtc && npm run test-node-wrtc",
-    "test-node-electron-webrtc": "WRTC=electron-webrtc tape test/*.js",
+    "test-browser": "airtap -- test/*.js",
+    "test-browser-local": "airtap --local -- test/*.js",
+    "test-node": "npm run test-node-wrtc",
     "test-node-wrtc": "WRTC=wrtc tape test/*.js",
     "test-cleanup": "kill $SERVER_PID"
   },
@@ -23,15 +22,13 @@
   "license": "MIT",
   "devDependencies": {
     "socket.io-client": "^2.0.3",
-    "electron-webrtc": "^0.3.0",
     "standard": "^8.6.0",
     "tape": "^4.6.3",
-    "wrtc": "0.0.61",
-    "zuul": "^3.11.1"
+    "wrtc": "^0.4.2"
   },
   "dependencies": {
-    "events": "^1.1.1",
     "inherits": "^2.0.3",
-    "simple-signal-client": "^1.2.6"
+    "nanobus": "^4.4.0",
+    "simple-signal-client": "^2.3.0"
   }
 }

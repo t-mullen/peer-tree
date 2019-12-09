@@ -2,6 +2,7 @@ var PeerTreeServer = require('./../src/index')
 
 var io = require('socket.io')()
 var treeServer = new PeerTreeServer(io, {
+  k1: 4,
   k: 2
 })
 
@@ -12,6 +13,6 @@ io.on('connection', function (socket) {
   })
 })
 
-var PORT = 3001
+var PORT = 3002
 console.log('test server running on port ' + PORT)
 io.listen(PORT)

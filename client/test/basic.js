@@ -2,7 +2,7 @@ var test = require('tape')
 var PeerTreeClient = require('./../src/index')
 var io = require('socket.io-client')
 
-var TEST_SERVER_URL = 'http://localhost:3001'
+var TEST_SERVER_URL = 'http://localhost:3002'
 
 // For testing on node, we must provide a WebRTC implementation
 var wrtc
@@ -32,10 +32,10 @@ test('construct client', function (t) {
   })
 })
 
-test('connect clients and send data (n=15, k=2)', function (t) {
-  var n = 15
-  
-  t.plan(2+((n-1)*4))
+test('connect clients and send data (n=30, k1=4, k=2)', function (t) {
+  var n = 30
+
+  t.plan((n-1)*4)
   t.timeoutAfter(15000)
 
   var sockets = []
@@ -52,37 +52,60 @@ test('connect clients and send data (n=15, k=2)', function (t) {
 
   clients[0].create()
 
-  clients[0].on('discover', function (treeID) {
-    t.pass('broadcaster discovered')
+  clients[0].on('downstreamPeer', (peer) => {
+    peer.write(testData)
+  })
 
-    for (var i = 1; i < clients.length; i++) {
-      clients[i].connect(treeID)
-      clients[i].on('discover', function (treeID) {
-        t.pass('client discovered')
+  clients[0].on('discover', treeID => {
+    clients.forEach((client, i) => {
+      if (i === 0) return
+      client.connect(treeID)
+      client.on('discover', (treeID) => {
+        t.pass('client discovered', treeID)
       })
-
-      var waiting = n-1
-      clients[i].on('connect', function (treeID) {
-        t.pass('client connected to upstream peer')
-        waiting--
-        if (waiting === 0) {
-          console.log(0, clients[0]._upPeers, clients[0]._downPeers)
-          clients[0].write(testData)
-          t.pass('broadcaster sent data')
-        }
-      })
-
-      ;(function (i) {
-        clients[i].on('data', function (data) {
-          console.log(i, clients[i]._upPeers, clients[i]._downPeers)
-          t.equals(testData, data.toString())
+      client.on('upstreamPeer', (peer) => {
+        peer.on('connect', () => {
+          t.pass('client connected to upstream peer', peer.id)
+        })
+        peer.on('data', function (data) {
+          t.equals(testData, data.toString(), 'got data')
           setTimeout(function () {
             sockets[i].emit('close')
             t.pass('socket closed')
           }, 3000)
         })
-      }(i))
-    }
+      })
+      client.on('downstreamPeer', (peer) => {
+        peer.write(testData)
+      })
+    })
+  })
+})
+
+test('tree can recover', function (t) {
+  t.plan(2)
+  const root = PeerTreeClient(io(TEST_SERVER_URL), { wrtc })
+  const mid = (new Array(4)).fill(null).map(_ => PeerTreeClient(io(TEST_SERVER_URL), { wrtc }))
+  const leaf = PeerTreeClient(io(TEST_SERVER_URL), { wrtc })
+
+  root.create()
+  root.on('discover', (treeID) => {
+    let waiting = 4
+    mid.forEach(c => {
+      c.connect(treeID)
+      c.on('upstreamPeer', () => {
+        waiting--
+        if (waiting == 0) {
+          leaf.connect(treeID)
+          let first = true
+          leaf.on('upstreamPeer', () => {
+            t.pass('leaf got upstream')
+            if (first) mid.forEach(c => c.destroy())
+            first = false
+          })
+        }
+      })
+    })
   })
 })
 
