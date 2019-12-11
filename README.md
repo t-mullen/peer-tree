@@ -23,7 +23,7 @@ Server:
 
 ```javascript
 var io = require('socket.io')() // A socket.io instance for signalling
-var PeerTreeServer = require('./../src/index')
+var PeerTreeServer = require('peer-tree-server')
 
 var treeServer = new PeerTreeServer(io, {
   k: 2 // k is the maximum number of downstream connections per peer,
