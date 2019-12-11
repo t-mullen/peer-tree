@@ -41,7 +41,6 @@ var treeClient = new PeerTreeClient(socket)
 treeClient.create()
 treeClient.on('discover', (treeID) => {
   // The tree has been created with the returned ID
-  treeClient.write('hello world')
 })
 treeClient.on('downstreamPeer', (peer) => {
   // pipe our data to every downstream peer
