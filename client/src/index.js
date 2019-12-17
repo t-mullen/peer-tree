@@ -15,6 +15,7 @@ function PeerTreeClient (io, opts) {
 
   self.destroyed = false 
   self._treeID = null
+  self._inTree = false
 
   self._socket = io
   self._client = new SimpleSignalClient(io)
@@ -31,10 +32,11 @@ function PeerTreeClient (io, opts) {
 PeerTreeClient.prototype.connect = function (treeID) {
   var self = this
 
-  self._treeID = treeID
-  if (self._treeID) {
+  if (self._inTree) {
     self.emit('error', new Error('Already connected to a tree'))
   }
+  self._inTree = true
+  self._treeID = treeID
 
   self._client.discover({
     treeID
@@ -89,9 +91,10 @@ PeerTreeClient.prototype._reconnectDownstream = function () {
 PeerTreeClient.prototype.create = function () {
   var self = this
 
-  if (self._treeID) {
+  if (self._inTree) {
     return self.emit('error', new Error('Already connected to tree.'))
   }
+  self._inTree = true
 
   self._client.discover({
     createNew: true
