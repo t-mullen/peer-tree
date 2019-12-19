@@ -1,6 +1,6 @@
 {
   "name": "peer-tree-client",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "A k-tree one-to-many network for WebRTC.",
   "main": "src/index.js",
   "directories": {
