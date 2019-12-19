@@ -13,7 +13,7 @@ function PeerTreeClient (io, opts) {
   self.opts = opts || {}
   self.opts.timeout = self.opts.timeout || 10000
 
-  self.destroyed = false 
+  self.destroyed = false
   self._treeID = null
   self._inTree = false
 
@@ -29,10 +29,10 @@ function PeerTreeClient (io, opts) {
 }
 
 // Join an existing tree
-PeerTreeClient.prototype.connect = function (treeID) {
+PeerTreeClient.prototype.connect = function (treeID, reconnecting = false) {
   var self = this
 
-  if (self._inTree) {
+  if (!reconnecting && self._inTree) {
     self.emit('error', new Error('Already connected to a tree'))
   }
   self._inTree = true
@@ -77,14 +77,7 @@ PeerTreeClient.prototype.reconnectUpstream = function () {
   var self = this
 
   self._disconnectUpstream()
-  self.connect(self._treeID) // rejoin the tree
-}
-
-PeerTreeClient.prototype._reconnectDownstream = function () {
-  var self = this
-
-  self._disconnectDownstream()
-  self.connect(self._treeID) // rejoin the tree
+  self.connect(self._treeID, true) // rejoin the tree
 }
 
 // Create a new tree
@@ -164,7 +157,7 @@ PeerTreeClient.prototype._onClose = function (peer) {
   }
 }
 
-PeerTreeClient.prototype._read = function () {}
+PeerTreeClient.prototype._read = function () { }
 
 PeerTreeClient.prototype._write = function (chunk, enc, next) {
   var self = this

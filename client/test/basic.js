@@ -35,7 +35,7 @@ test('construct client', function (t) {
 test('connect clients and send data (n=30, k1=4, k=2)', function (t) {
   var n = 30
 
-  t.plan((n-1)*4)
+  t.plan((n - 1) * 4)
   t.timeoutAfter(15000)
 
   var sockets = []
@@ -95,7 +95,7 @@ test('tree can recover', function (t) {
       c.connect(treeID)
       c.on('upstreamPeer', () => {
         waiting--
-        if (waiting == 0) {
+        if (waiting === 0) {
           leaf.connect(treeID)
           let first = true
           leaf.on('upstreamPeer', () => {
